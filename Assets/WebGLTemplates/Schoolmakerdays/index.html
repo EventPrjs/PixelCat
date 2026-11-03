@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#163b54">
+  <title>Endless Pixelgrid · Schoolmakerdays</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #163b54; font-family: Arial, sans-serif; }
+    body { display: grid; place-items: center; }
+    #stage { position: relative; width: min(100vw, 177.7778vh); aspect-ratio: 16/9; background: #f3f8fb; }
+    canvas { display: block; width: 100%; height: 100%; outline: none; }
+    #cover { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 22px; background: #f3f8fb; color: #163b54; padding: 30px; text-align: center; }
+    h1 { font-size: clamp(24px, 4vw, 60px); margin: 0; }
+    p { font-size: clamp(16px, 1.6vw, 24px); margin: 0; line-height: 1.5; }
+    button { border: 0; padding: 16px 28px; border-radius: 4px; cursor: pointer; background: #1b9ed4; color: white; font-size: 20px; font-weight: bold; }
+    button:focus-visible { outline: 3px solid #e30613; outline-offset: 4px; }
+    #fullscreen { position: fixed; right: 12px; top: 10px; z-index: 3; padding: 7px 12px; font-size: 14px; background: #163b54; opacity: .85; }
+    #progress { width: min(360px, 70vw); height: 8px; background: #d5e5ee; }
+    #bar { width: 0; height: 100%; background: #1b9ed4; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main id="stage">
+    <canvas id="unity-canvas" width="1920" height="1080" tabindex="0" aria-label="Endless Pixelgrid. Live-Kontakte: W, A, Pfeiltasten und S. D übernimmt die Zeile. G leert das Raster."></canvas>
+    <div id="cover">
+      <p>SCHOOLMAKERDAYS</p>
+      <h1>Endless Pixelgrid</h1>
+      <p id="status" role="status">Das Pixelraster wird geladen …</p>
+      <div id="progress"><div id="bar"></div></div>
+      <button id="start" hidden>Los geht’s</button>
+    </div>
+  </main>
+  <button id="fullscreen" aria-label="Vollbild umschalten">Vollbild</button>
+  <script>
+    const canvas = document.getElementById('unity-canvas');
+    const cover = document.getElementById('cover');
+    const status = document.getElementById('status');
+    const start = document.getElementById('start');
+    let instance;
+    let started = false;
+    const script = document.createElement('script');
+    script.src = 'Build/{{{ LOADER_FILENAME }}}';
+    function fail(message) {
+      status.textContent = message;
+      document.getElementById('progress').hidden = true;
+    }
+    script.onerror = () => fail('Die Spieldateien konnten nicht geladen werden. Bitte die Seite neu laden.');
+    script.onload = () => createUnityInstance(canvas, {
+      dataUrl: 'Build/{{{ DATA_FILENAME }}}',
+      frameworkUrl: 'Build/{{{ FRAMEWORK_FILENAME }}}',
+      codeUrl: 'Build/{{{ CODE_FILENAME }}}',
+      streamingAssetsUrl: 'StreamingAssets',
+      companyName: 'Schoolmakerdays', productName: 'Endless Pixelgrid', productVersion: '1.0',
+      matchWebGLToCanvasSize: true,
+      showBanner: (message, type) => { if (type === 'error') fail('WebGL konnte nicht gestartet werden: ' + message); }
+    }, progress => {
+      document.getElementById('bar').style.width = Math.round(progress * 100) + '%';
+    }).then(game => {
+      instance = game;
+      game.SendMessage('EndlessPixelGrid', 'BrowserFocus', '0');
+      status.textContent = 'Halte EARTH und berühre die Kontakte. Mit D übernimmst du deine Zeile.';
+      document.getElementById('progress').hidden = true;
+      start.hidden = false;
+    }).catch(error => fail('Das Spiel konnte nicht gestartet werden. Bitte WebGL im Browser aktivieren und neu laden. ' + error));
+    document.body.appendChild(script);
+    start.onclick = () => {
+      started = true;
+      cover.hidden = true;
+      canvas.focus();
+      instance.SendMessage('EndlessPixelGrid', 'BrowserFocus', '1');
+    };
+    function focusGame(focused) {
+      if (instance) instance.SendMessage('EndlessPixelGrid', 'BrowserFocus', focused && started ? '1' : '0');
+    }
+    window.addEventListener('blur', () => focusGame(false));
+    document.addEventListener('visibilitychange', () => focusGame(!document.hidden && document.activeElement === canvas));
+    canvas.addEventListener('blur', () => focusGame(false));
+    canvas.addEventListener('focus', () => focusGame(true));
+    canvas.addEventListener('pointerdown', () => canvas.focus());
+    canvas.addEventListener('keydown', event => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
+    });
+    document.getElementById('fullscreen').onclick = async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch (_) { /* Browser may restrict fullscreen; the game remains usable. */ }
+      if (started) canvas.focus();
+    };
+  </script>
+</body>
+</html>
